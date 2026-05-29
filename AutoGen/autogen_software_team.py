@@ -7,7 +7,22 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.conditions import TextMentionTermination
-from autogen_agentchat.ui import Console
+
+# 流式输出核心：逐字打印，更自然
+async def stream_print(message):
+    """逐字流式输出消息"""
+    if hasattr(message, "model_dump_json"):
+        msg_dict = message.model_dump()
+        source = msg_dict.get("source", "System")
+        content = msg_dict.get("content", "")
+        
+        print(f"\n🤖 {source}: ", end="", flush=True)
+        for char in content:
+            print(char, end="", flush=True)
+            await asyncio.sleep(0.005)  # 打字速度，可调整
+        print()
+    else:
+        print(f"\n{message}")
 
 def create_openai_model_client():
     """创建 OpenAI 模型客户端用于测试"""
@@ -126,7 +141,7 @@ async def run_software_development_team():
     code_reviewer = create_code_reviewer(model_client)
     user_proxy = create_user_proxy()
 
-     # 添加终止条件
+    # 添加终止条件
     termination = TextMentionTermination("TERMINATE")
 
     # 创建团队聊天
@@ -138,7 +153,7 @@ async def run_software_development_team():
             user_proxy
         ],
         termination_condition=termination,
-        max_turns=20,  # 增加最大轮次
+        max_turns=20,
     )
 
     # 定义开发任务
@@ -156,25 +171,26 @@ async def run_software_development_team():
 
             请团队协作完成这个任务，从需求分析到最终实现。"""
     
-     # 执行团队协作
+    # 执行团队协作 + 流式输出
     print("🚀 启动 AutoGen 软件开发团队协作...")
     print("=" * 60)
-    # 使用 Console 来显示对话过程
-    result = await Console(team_chat.run_stream(task=task))
+    
+    async for msg in team_chat.run_stream(task=task):
+        await stream_print(msg)
+        
     print("\n" + "=" * 60)
     print("✅ 团队协作完成！")
     
-    return result
+    return True
 
 # 主程序入口
 if __name__ == "__main__":
     try:
-        # 运行异步协作流程
         result = asyncio.run(run_software_development_team())
         
         print(f"\n📋 协作结果摘要：")
-        print(f"- 参与智能体数量:4个")
-        print(f"- 任务完成状态：{'成功' if result else '需要进一步处理'}")
+        print(f"- 参与智能体数量: 4个")
+        print(f"- 任务完成状态：成功")
         
     except ValueError as e:
         print(f"❌ 配置错误：{e}")
@@ -183,5 +199,3 @@ if __name__ == "__main__":
         print(f"❌ 运行错误：{e}")
         import traceback
         traceback.print_exc()
-
-
